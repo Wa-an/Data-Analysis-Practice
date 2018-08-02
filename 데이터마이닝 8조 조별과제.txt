@@ -1,0 +1,210 @@
+﻿###########################데이터 마이닝 조별과제#################################
+
+# 1. read data
+bank<-read.csv("project - data.csv",header=T)
+head(bank)
+str(bank)
+# 은행에서고객의 정기예금 가입 여부 를 예측하기 위한 목적으로 만든 데이터 셋 
+# 총 20개의 input variables(독립변수-고객의 나이, 직업, 교육 수준, 잔고 등)와 
+# 1개의 output variable(y, 종속변수-고객의 정기 예금 가입 여부)로 이루어져있다.
+# 독립변수(x)는 총 10개의 수치형 변수와 10개의 범주형 변수로 이루어있다.
+# 범주형 변수들 중에서는 곳곳에 결측값(unknown,999 등)이 보인다.
+# 또한, 정기 예금 가입 여부에 가장 영향을 미칠 것 같은 
+# 6개의 변수(age, job, marital, education, cons.price.idx, cons.conf.idx를 골랐다.
+# y가 존재하고, binary data기 때문에 이 변수들이 y에 미치는 영향을
+# supervised learning(지도 학습)으로 분석해 볼 것이다.
+# 가장 대표적인 logistic regression, decision tree, 2가지 방법으로로 분석 후 
+# 가장 간단하며, 성능이 좋은 모델로 예측할 것이다. 
+
+
+
+# 2. 데이터 전처리- 변수명 변경
+library(dplyr)
+bank<-bank[,c("age","job","marital","education","cons.price.idx","cons.conf.idx","y")]
+bank<-rename(bank,mar=marital,edu=education,cpi=cons.price.idx,cci=cons.conf.idx)
+str(bank)
+bank$y<-as.numeric(bank$y)
+bank$y<-bank$y-1
+# logistic 회귀분석과 같은 분류작업의 편리성을 위해을 위해서 y값을 1,0으로 만들었다.
+
+
+
+# 3. plot
+plot(bank$y)
+#정기예금에 가입 한 고객보다 안 한 고객이 더 많다.
+
+hist(bank$age,freq=F)
+p_age <- ggplot(bank, aes(factor(y), age)) + geom_boxplot(aes(fill = factor(y)))
+p_age
+# 나이에 대한 히스토그램으로 보아 약간 왼쪽으로 치우쳐보이며, 
+# ggplot으로 예금 가입 여부에 대한 분포를 그려본 결과 나이에 대한 분포는 비슷해 보인다.
+install.packages("moments")
+library(moments)
+skewness(bank$age)
+agostino.test(bank$age)
+kurtosis(bank$age)
+anscombe.test(bank$age)
+# 검정 결과 p-value가 유의수준 0.05보다 작으므로 나이 분포는 왼쪽으로 치우쳤다고 할 수 있다.
+# 또한, 첨도 역시 3보다 크고, 검정 결과 p-value가 유의수준 0.05보다 작으므로 
+# 정규분포처럼 보이지 않는다.
+
+plot(bank$job)
+# 직업이 있는 고객들이 은퇴한 사람들보다 훨씬 많으며 행정직, 사업가, 기술자 순으로 그 수가 많다.
+plot(bank$mar)
+# 고객들의 수는 결혼, 미혼, 이혼 순으로 보인다.
+plot(bank$edu)
+# 대학을 졸업 고객이 가장 많으며, 고등학교 졸업, 중학교 졸업 등의 순서로 그 수가 많다. 
+
+hist(bank$cpi)
+p_cpi <- ggplot(bank, aes(factor(y), cpi)) + geom_boxplot(aes(fill = factor(y)))
+p_cpi
+# 특정 값에 고객이 많이 분포된 것으로 보인다.
+# 정기 예금을 가입한 고객과 가입하지 않은 고객의 분포 차이가 보인다.
+
+hist(bank$cci)
+p_cci <- ggplot(bank, aes(factor(y), cci)) + geom_boxplot(aes(fill = factor(y)))
+p_cci
+# 소비자가격지수와 같이 특정 값에 고객이 많이 분포된 것으로 보인다.
+# 정기 예금을 가입한 고객과 가입하지 않은 고객의 분포 차이가 보인다.
+
+
+
+# 4. data split(train/test set)
+part_idx<-createDataPartition(bank$y,p=0.7, list=FALSE)
+#train set : test set의 비율이 7:3으로 조정할 것이다.
+#또한 추출 시마다 값이 다르게 나올것이다.
+train<-bank[part_idx,] 
+test<-bank[-part_idx,]
+# 예측력 성능을 실험하기 위해 데이터를 train set과 validation set으로 나누었다.
+
+
+
+# 5-1. logistic regression
+model <- glm(y ~ age + job + mar + edu + cpi + cci, data = train, family = "binomial")
+summary(model)
+# age, cci, cpi는 유의하며, job에서는 학생, 퇴직자 등인 경우 
+# 예금 가입에 영향을 주는 것으로 보인다.
+# 또한, mar에서는 미혼의 여부에 따라 예금 가입에 영향을 주는 것으로 보인다.
+# 예상 외로 edu는 교육 수준을 모르는 경우가 유의수준 근처에 있고, 나머지는 
+# 예금 가입에 영향을 주지 않는 것으로 보인다.
+
+model2 <- glm(y ~ age + job + mar + cpi + cci, data = train, family = "binomial")
+summary(model2)
+# 변수 edu를 제거하자 AIC값이 22 상승했다. edu를 제거하는 것은 옳다고 보기 어렵다.
+# 따라서 model을 최종 모형으로 선택할 것이다.
+
+anova(model, test="Chisq") 
+# 분산분석 결과에서도 변수들 모두가 유의수준 0.05안에 들어오므로 모두 유의하다고 할 수 있다.
+
+confint(model) #로그가능도로 구한 신뢰구간, 일반적
+confint.default(model) #회귀계수의 표준편차로 구한 신뢰구간
+# Coefficient는 로지스틱 회귀모형에서 회귀계수가 변수가 한 단위 증가했을 때 
+# log(odds)의 증가량으로 해석할 수 있다.
+# ex)cci가 1증가할 때, y의 log odds(가입 하지 않음에 대한)가 0.11724905 감소한다.
+
+exp(coef(model))  #오즈비 산출
+exp(confint(model))  #오즈비에 대한 95% 신뢰구간
+
+install.packages("pscl")
+library(pscl)
+pR2(model2)
+# 로지스틱 회귀분석에도 선형 회귀 분석에서의 R2와 유사한 개념이 존재한다. 
+# Mcfadden R2으로 모델 fit을 확인가능하다.
+# “pscl” 패키지의 pR2 함수를 사용하여 Mcfadden R2()를 알아볼 수 있다.
+# 로지스틱 회귀분석에서 R2값은 대개 낮게 나오는 편이므로, 모형평가에서 R2에 너무 의존할 필요는 없다
+
+
+
+# 6-1. 예측성능 확인
+install.packages("ROCR")
+library(ROCR)
+
+p <- predict(model, newdata = test , type="response")
+table(Actual= test$y,Predicted = round(p))
+#예측 정확도가 (10936+6)/12356 = 88.56%로 나온다.
+
+pr <- prediction(p, test$y)
+prf <- performance(pr, measure = "tpr", x.measure = "fpr")
+plot(prf)
+# ROC곡선은 로지스틱 회귀모형과 같이 반응값이 범주형인 모델을 평가할 때 사용,
+# 그래프가 왼쪽 상단에 가까울수록 좋은 모델이므로 위 ROC곡선으로 보아
+# 좋은 모델이라고 하기 힘들다.
+auc <- performance(pr, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+# AUC는 ROC그래프 아래영역의 넓이이다. 1에 가까울수록 좋은 모델이며, 
+# 판단 기준은 대략적으로 excellent =  0.9~1, good = 0.8~0.9, fair = 0.7~0.8
+# poor = 0.6~0.7, fail = 0.5~0.6 이렇게 되겠다.
+# AUC값이 좋지 않으므로 좋은 모델이라고 할 수 없다.
+
+
+
+# 5-2. decision tree
+install.packages(c("rpart","rpart.plot","rattle"))
+library(rpart)
+library(rpart.plot)
+library(rattle)
+bank.rpart <- rpart(y ~ ., data = train)
+fancyRpartPlot(bank.rpart)
+# 루트노드가 cci를 기준으로 나뉘는 것으로  보아 cci가 가장 중요한 변수라고 할 수 있다.
+# 그 다음은 age가 중요한 변수라고 할 수 있다.
+
+# 6-2. 예측 성능 확인.
+rpartpred<-predict(bank.rpart, test, type='vector')
+table(Actual= test$y,Predicted =round(rpartpred))
+
+pr <- prediction(rpartpred, test$y)
+prf <- performance(pr, measure = "tpr", x.measure = "fpr")
+plot(prf)
+# ROC곡선은 로지스틱 회귀모형과 같이 반응값이 범주형인 모델을 평가할 때 사용,
+# 그래프가 왼쪽 상단에 가까울수록 좋은 모델이므로 위 ROC곡선으로 보아
+# 좋은 모델이라고 하기 힘들다.
+auc <- performance(pr, measure = "auc")
+auc <- auc@y.values[[1]]
+auc 
+# AUC는 ROC그래프 아래영역의 넓이이다. 1에 가까울수록 좋은 모델이며, 
+# 판단 기준은 대략적으로 excellent =  0.9~1, good = 0.8~0.9, fair = 0.7~0.8
+# poor = 0.6~0.7, fail = 0.5~0.6 이렇게 되겠다.
+# AUC값이 나쁘지 않으므로 좋은 모델이라고 할 수 있다.
+
+#crossvalidation 사용
+printcp(bank.rpart) # cross-validation 계산 함수
+plotcp(bank.rpart)
+
+# xerror가 가장 낮은 size를 선택하면 됨. => 6
+
+################ 오류로 수정 필요
+cv.trees<-cv.tree(bank.rpart, FUN=prune.misclass, K=6 ) # for classification decision tree
+plot(cv.trees) 
+##################
+
+# 가지치기
+ptree<-prune(bank.rpart, cp= bank.rpart$cptable[which.min(bank.rpart$cptable[,"xerror"]),"CP"])
+#CP:complexity parameter
+
+# rpart.control에서 cp값을 0으로 설정하면 나무모형의 
+# 오분류값이 최소가 될 때 까지 분할을 진행한다. 
+
+plot(ptree)
+text(ptree)
+
+rpartpred2<-predict(ptree, test, type='vector')
+table(Actual= test$y,Predicted =rpartpred2)
+
+pr <- prediction(p, test$y)
+prf <- performance(pr, measure = "tpr", x.measure = "fpr")
+plot(prf)
+# ROC곡선은 로지스틱 회귀모형과 같이 반응값이 범주형인 모델을 평가할 때 사용,
+# 그래프가 왼쪽 상단에 가까울수록 좋은 모델이므로 위 ROC곡선으로 보아
+# 좋은 모델이라고 하기 힘들다.
+auc <- performance(pr, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+# AUC는 ROC그래프 아래영역의 넓이이다. 1에 가까울수록 좋은 모델이며, 
+# 판단 기준은 대략적으로 excellent =  0.9~1, good = 0.8~0.9, fair = 0.7~0.8
+# poor = 0.6~0.7, fail = 0.5~0.6 이렇게 되겠다.
+# AUC값이 좋지 않으므로 좋은 모델이라고 할 수 없다.
+
+# tree 모형과 logistic 모형중에서는 tree 모형이 보다 AUC가 크기 때문에
+# tree 모형을 선택하는 것이 합리적이며, bank.rpart 모형이 가장 AUC가 크기 때문에
+# bank.rpart모형이 가장 바람직한 모형이라고 할 수 있다.
