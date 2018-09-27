@@ -1,0 +1,49 @@
+install.packages("rvest") #웹사이트 통째로 긁어오는것
+install.packages("httr") #웹하고 통신하는 것
+library(rvest)
+library(httr)
+
+
+###########다음
+burl = 'https://search.daum.net/search?w=blog&nil_search=btn&DA=NTB&enc=utf8&q=%EC%84%9C%EC%9A%B8+%EB%A7%9B%EC%A7%91'  #검색 후 나온 URL
+allreviewDblog = c()
+
+for(page in 1:5)
+{
+  urlsDb = paste(burl,page,sep="")
+  htxtDb = read_html(urlsDb)
+  commentsDb = html_nodes(htxtDb,'p.f_eb.desc')
+  comtextDb = html_text(commentsDb)
+  if(length(comtextDb) == 0)
+  {
+    break
+  }
+  allreviewDblog = c(allreviewDblog,comtextDb)
+  print(page)
+}
+allreviewDblog
+
+write(allreviewDblog,"맛집.txt")
+
+##########네이버
+allreviewN = c()
+urlN = 'https://search.naver.com/search.naver?date_from=&date_option=0&date_to=&dup_remove=1&ie=utf8&nso=&post_blogurl=&post_blogurl_without=&query=%EB%9D%BC%EC%98%A4%EC%8A%A4&sm=tab_pge&srchby=all&st=sim&where=post&start='
+
+for(page in 1:5)
+{
+  a = (page - 1) * 10 + 1
+  urlsN = paste(urlN,a,sep="")
+  htxtN = read_html(urlsN)
+  commentsN = html_nodes(htxtN,'meta content')
+  comtextN = html_text(commentsN)
+  if(length(comtextN) == 0)
+  {
+    break
+  }
+  allreviewN = c(allreviewN,comtextN)
+  print(a)
+}
+allreviewN
+
+write(allreviewN, "네이버1.txt") 
+
